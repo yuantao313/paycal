@@ -112,7 +112,7 @@ export function buildPaydayEvents(options, calendar) {
   for (const year of options.years) {
     for (let month = 1; month <= 12; month += 1) {
       const actual = resolvePayday(year, month, options.day, options.strategy, calendar);
-      const title = `${year}年${month}月发薪日`;
+      const title = `发薪日`;
       events.push({
         uid: `payday-${options.day}-${options.strategy}-${formatDate(actual)}`,
         title,
@@ -151,7 +151,7 @@ export async function buildMonthEndSaturdayEvents(options, calendar) {
       if (!(await shouldWorkMonthEndSaturday(saturday, calendar))) {
         continue;
       }
-      const title = `${year}年${month}月末周六（班）`;
+      const title = `月末周六（班）`;
       events.push({
         uid: `month-end-saturday-${formatDate(saturday)}`,
         title,
@@ -336,7 +336,7 @@ export function renderHome(url) {
     const result = document.querySelector("#result");
     const calendars = {
       payday: { name: "发薪日", path: "/payday.ics" },
-      "month-end-saturday": { name: "月末周六（班）", path: "/month-end-saturday.ics" },
+      "month-end-saturday": { name: "月末周六", path: "/month-end-saturday.ics" },
       combined: { name: "合并订阅", path: "/combined.ics" },
     };
     function years() {
