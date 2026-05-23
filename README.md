@@ -1,4 +1,7 @@
-# Payday Calendar Service
+# Paycal
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yuantao313/paycal)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yuantao313/paycal)
 
 独立的发薪日与月末周六 ICS 订阅服务，可部署到 Cloudflare Workers 或 Vercel。
 

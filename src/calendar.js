@@ -223,7 +223,7 @@ export function buildCalendar(events, calendarName) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//payday-calendar-service//ICS//ZH",
+    "PRODID:-//paycal//ICS//ZH",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeIcs(calendarName)}`,
@@ -232,7 +232,7 @@ export function buildCalendar(events, calendarName) {
   for (const event of events) {
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${escapeIcs(event.uid)}@payday-calendar-service`,
+      `UID:${escapeIcs(event.uid)}@paycal`,
       `DTSTAMP:${now}`,
       `DTSTART;VALUE=DATE:${formatDateCompact(event.start)}`,
       `DTEND;VALUE=DATE:${formatDateCompact(event.end)}`,
