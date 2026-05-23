@@ -1,4 +1,4 @@
-const HOLIDAY_API_BASE = "https://timor.tech/api/holiday";
+const HOLIDAY_ICS_URL = "https://calendars.icloud.com/holidays/cn_zh.ics";
 
 export async function handleRequest(request) {
   const url = new URL(request.url);
@@ -43,16 +43,14 @@ export function parseOptions(url) {
   const day = clampInt(url.searchParams.get("day"), 15, 1, 31);
   const strategy = parseStrategy(url.searchParams);
   const years = parseYears(url.searchParams);
-  const maxStreak = clampInt(url.searchParams.get("maxStreak"), 7, 2, 31);
   const paydayLabel = strategy === "advance" ? `${day}日+提前` : strategy === "delay" ? `${day}日+延后` : `${day}日`;
   const paydayName = cleanText(url.searchParams.get("paydayName") || url.searchParams.get("name")) || `公司发薪日（${paydayLabel}）`;
-  const saturdayName = cleanText(url.searchParams.get("saturdayName")) || "月末周六加班";
+  const saturdayName = cleanText(url.searchParams.get("saturdayName")) || "月末周六（班）";
 
   return {
     day,
     strategy,
     years,
-    maxStreak,
     paydayName,
     saturdayName,
     combinedName: `${paydayName} + ${saturdayName}`,
@@ -63,61 +61,46 @@ export function parseOptions(url) {
 }
 
 export async function buildHolidayCalendar(years, fetcher = globalThis.fetch) {
-  const normalizedYears = [...new Set(years)].sort((a, b) => a - b);
   const holidays = new Set();
-  const tiaoxiu = new Map();
+  const tiaoxiu = new Set();
 
-  await Promise.all(normalizedYears.map(async (year) => {
-    try {
-      const resp = await fetcher(`${HOLIDAY_API_BASE}/year/${year}`, cacheOptions(86400));
-      if (!resp.ok) {
-        return;
+  try {
+    const resp = await fetcher(HOLIDAY_ICS_URL, cacheOptions(86400));
+    if (resp.ok) {
+      const text = await resp.text();
+      const parsed = parseHolidayIcs(text);
+      for (const date of parsed.holidays) {
+        holidays.add(date);
       }
-      const data = await resp.json();
-      if (data.code !== 0 || !data.holiday || typeof data.holiday !== "object") {
-        return;
+      for (const date of parsed.tiaoxiu) {
+        tiaoxiu.add(date);
       }
-      for (const [dateKey, info] of Object.entries(data.holiday)) {
-        if (info && typeof info === "object" && info.holiday) {
-          holidays.add(info.date || `${year}-${dateKey}`);
-        }
-      }
-    } catch (_error) {
-      // Holiday API is best effort; fall back to weekend-only logic.
     }
-  }));
+  } catch (_error) {
+    // Holiday calendar is best effort; fall back to weekend-only logic.
+  }
 
   return {
     isHoliday(date) {
       return holidays.has(formatDate(date));
     },
     async isTiaoxiu(date) {
-      const ds = formatDate(date);
-      if (tiaoxiu.has(ds)) {
-        return tiaoxiu.get(ds);
-      }
-      try {
-        const resp = await fetcher(`${HOLIDAY_API_BASE}/info/${ds}`, cacheOptions(86400));
-        if (!resp.ok) {
-          tiaoxiu.set(ds, false);
-          return false;
-        }
-        const data = await resp.json();
-        const result = data?.type?.type === 3;
-        tiaoxiu.set(ds, result);
-        return result;
-      } catch (_error) {
-        tiaoxiu.set(ds, false);
-        return false;
-      }
+      return tiaoxiu.has(formatDate(date));
+    },
+    isTiaoxiuSync(date) {
+      return tiaoxiu.has(formatDate(date));
     },
     async isRestDay(date) {
-      if (holidays.has(formatDate(date))) {
+      const ds = formatDate(date);
+      if (holidays.has(ds)) {
         return true;
+      }
+      if (tiaoxiu.has(ds)) {
+        return false;
       }
       const weekday = date.getUTCDay();
       if (weekday === 0 || weekday === 6) {
-        return !(await this.isTiaoxiu(date));
+        return true;
       }
       return false;
     },
@@ -165,30 +148,29 @@ export async function buildMonthEndSaturdayEvents(options, calendar) {
   for (const year of options.years) {
     for (let month = 1; month <= 12; month += 1) {
       const saturday = lastSaturday(year, month);
-      if (!(await shouldWorkMonthEndSaturday(saturday, calendar, options.maxStreak))) {
+      if (!(await shouldWorkMonthEndSaturday(saturday, calendar))) {
         continue;
       }
-      const title = `${year}年${month}月末周六加班`;
+      const title = `${year}年${month}月末周六（班）`;
       events.push({
         uid: `month-end-saturday-${formatDate(saturday)}`,
         title,
         start: saturday,
         end: addDays(saturday, 1),
-        description: `${title}\n规则：月末最后一个周六；法定节假日/调休工作日跳过；连续工作 ${options.maxStreak} 天及以上跳过`,
+        description: `${title}\n规则：仅当是正常周六且不会形成连续工作 7 天以上时才加入`,
       });
     }
   }
   return events;
 }
 
-export async function shouldWorkMonthEndSaturday(saturday, calendar, maxStreak = 7) {
+export async function shouldWorkMonthEndSaturday(saturday, calendar) {
   if (calendar.isHoliday(saturday)) {
     return false;
   }
   if (await calendar.isTiaoxiu(saturday)) {
     return false;
   }
-
   let consecutive = 1;
 
   let cursor = addDays(saturday, -1);
@@ -197,7 +179,7 @@ export async function shouldWorkMonthEndSaturday(saturday, calendar, maxStreak =
       break;
     }
     consecutive += 1;
-    if (consecutive >= maxStreak) {
+    if (consecutive >= 7) {
       return false;
     }
     cursor = addDays(cursor, -1);
@@ -209,7 +191,7 @@ export async function shouldWorkMonthEndSaturday(saturday, calendar, maxStreak =
       break;
     }
     consecutive += 1;
-    if (consecutive >= maxStreak) {
+    if (consecutive >= 7) {
       return false;
     }
     cursor = addDays(cursor, 1);
@@ -302,7 +284,7 @@ export function renderHome(url) {
       <fieldset class="controls">
         <legend>规则</legend>
         <div class="row">
-          <label>每月几号发薪
+      <label>每月几号发薪
             <input id="day" type="number" min="1" max="31" value="15" required>
           </label>
           <label>生成年份
@@ -331,9 +313,9 @@ export function renderHome(url) {
           <label class="subscription" data-calendar="month-end-saturday">
             <span class="subscription-head">
               <input type="checkbox" name="calendar" value="month-end-saturday" checked>
-              <span>月末周六</span>
+              <span>月末周六（班）</span>
             </span>
-            <p>每月最后一个周六，跳过法定节假日和调休工作日。</p>
+            <p>每月最后一个普通周六，且不会把整段工作日拉成 7 天连班时才会生成。</p>
           </label>
           <label class="subscription" data-calendar="combined">
             <span class="subscription-head">
@@ -354,7 +336,7 @@ export function renderHome(url) {
     const result = document.querySelector("#result");
     const calendars = {
       payday: { name: "发薪日", path: "/payday.ics" },
-      "month-end-saturday": { name: "月末周六", path: "/month-end-saturday.ics" },
+      "month-end-saturday": { name: "月末周六（班）", path: "/month-end-saturday.ics" },
       combined: { name: "合并订阅", path: "/combined.ics" },
     };
     function years() {
@@ -438,6 +420,9 @@ export function makeTestCalendar({ holidays = [], tiaoxiu = [] } = {}) {
     async isTiaoxiu(date) {
       return tiaoxiuSet.has(formatDate(date));
     },
+    isTiaoxiuSync(date) {
+      return tiaoxiuSet.has(formatDate(date));
+    },
     async isRestDay(date) {
       if (holidaySet.has(formatDate(date))) {
         return true;
@@ -449,6 +434,104 @@ export function makeTestCalendar({ holidays = [], tiaoxiu = [] } = {}) {
       return false;
     },
   };
+}
+
+function parseHolidayIcs(text) {
+  const holidays = new Set();
+  const tiaoxiu = new Set();
+  let event = null;
+
+  for (const line of unfoldIcsLines(text)) {
+    if (line === "BEGIN:VEVENT") {
+      event = {};
+      continue;
+    }
+    if (line === "END:VEVENT") {
+      if (event) {
+        const kind = classifyHolidayEvent(event);
+        if (kind) {
+          const dates = expandDateRange(event.start, event.end);
+          for (const date of dates) {
+            if (kind === "holiday") {
+              holidays.add(date);
+            } else {
+              tiaoxiu.add(date);
+            }
+          }
+        }
+      }
+      event = null;
+      continue;
+    }
+    if (!event) {
+      continue;
+    }
+
+    const colon = line.indexOf(":");
+    if (colon === -1) {
+      continue;
+    }
+    const key = line.slice(0, colon).split(";")[0].toUpperCase();
+    const value = line.slice(colon + 1).trim();
+    if (key === "DTSTART") {
+      event.start = value;
+    } else if (key === "DTEND") {
+      event.end = value;
+    } else if (key === "SUMMARY") {
+      event.summary = value;
+    } else if (key === "X-APPLE-SPECIAL-DAY") {
+      event.specialDay = value;
+    }
+  }
+
+  return { holidays, tiaoxiu };
+}
+
+function classifyHolidayEvent(event) {
+  const summary = event.summary || "";
+  const specialDay = event.specialDay || "";
+  if (summary.includes("（休）") || specialDay === "WORK-HOLIDAY") {
+    return "holiday";
+  }
+  if (summary.includes("（班）") || specialDay === "ALTERNATE-WORKDAY") {
+    return "tiaoxiu";
+  }
+  return null;
+}
+
+function expandDateRange(start, end) {
+  if (!start) {
+    return [];
+  }
+  const dates = [];
+  let cursor = parseIcsDate(start);
+  const limit = end ? parseIcsDate(end) : addDays(cursor, 1);
+  while (cursor < limit) {
+    dates.push(formatDate(cursor));
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+
+function parseIcsDate(value) {
+  const match = /^(\d{4})(\d{2})(\d{2})/.exec(value);
+  if (!match) {
+    return new Date(NaN);
+  }
+  return makeDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+function unfoldIcsLines(text) {
+  const lines = text.split(/\r?\n/);
+  const unfolded = [];
+  for (const line of lines) {
+    if ((line.startsWith(" ") || line.startsWith("\t")) && unfolded.length > 0) {
+      unfolded[unfolded.length - 1] += line.slice(1);
+    } else if (line) {
+      unfolded.push(line);
+    }
+  }
+  return unfolded;
 }
 
 function parseStrategy(searchParams) {
@@ -486,6 +569,9 @@ function expandLookupYears(years) {
 function isRestDaySync(date, calendar) {
   if (calendar.isHoliday(date)) {
     return true;
+  }
+  if (typeof calendar.isTiaoxiuSync === "function" && calendar.isTiaoxiuSync(date)) {
+    return false;
   }
   const weekday = date.getUTCDay();
   return weekday === 0 || weekday === 6;

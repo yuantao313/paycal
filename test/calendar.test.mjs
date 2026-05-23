@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCalendar,
+  buildHolidayCalendar,
   buildMonthEndSaturdayEvents,
   buildPaydayEvents,
   lastSaturday,
@@ -35,6 +36,21 @@ test("resolvePayday can leave rest day unchanged", () => {
   assert.equal(actual.toISOString().slice(0, 10), "2025-06-15");
 });
 
+test("resolvePayday treats tiaoxiu Saturday as a workday", () => {
+  const calendar = {
+    isHoliday() {
+      return false;
+    },
+    isTiaoxiuSync() {
+      return true;
+    },
+  };
+
+  const actual = resolvePayday(2025, 2, 15, "advance", calendar);
+
+  assert.equal(actual.toISOString().slice(0, 10), "2025-02-15");
+});
+
 test("buildPaydayEvents honors holidays", () => {
   const calendar = makeTestCalendar({ holidays: ["2025-09-15"] });
   const events = buildPaydayEvents(
@@ -51,7 +67,34 @@ test("lastSaturday finds month end Saturday", () => {
   assert.equal(lastSaturday(2025, 2).toISOString().slice(0, 10), "2025-02-22");
 });
 
-test("month end Saturday skips holiday and tiaoxiu", async () => {
+test("buildHolidayCalendar parses iCloud holiday feed", async () => {
+  const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20250208
+DTEND;VALUE=DATE:20250211
+SUMMARY;LANGUAGE=zh_CN:春节（休）
+X-APPLE-SPECIAL-DAY:WORK-HOLIDAY
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20250215
+SUMMARY;LANGUAGE=zh_CN:春节（班）
+X-APPLE-SPECIAL-DAY:ALTERNATE-WORKDAY
+END:VEVENT
+END:VCALENDAR`;
+
+  const calendar = await buildHolidayCalendar([2025], async () => new Response(ics));
+
+  assert.equal(calendar.isHoliday(new Date(Date.UTC(2025, 1, 9))), true);
+  assert.equal(await calendar.isTiaoxiu(new Date(Date.UTC(2025, 1, 15))), true);
+  assert.equal(await calendar.isRestDay(new Date(Date.UTC(2025, 1, 9))), true);
+  assert.equal(await calendar.isRestDay(new Date(Date.UTC(2025, 1, 15))), false);
+});
+
+test("month end Saturday skips holiday and tiaoxiu, but accepts normal Saturday", async () => {
+  const normalSaturdayCalendar = makeTestCalendar();
+  assert.equal(await shouldWorkMonthEndSaturday(new Date(Date.UTC(2025, 0, 25)), normalSaturdayCalendar), true);
+
   const holidayCalendar = makeTestCalendar({ holidays: ["2025-01-25"] });
   assert.equal(await shouldWorkMonthEndSaturday(new Date(Date.UTC(2025, 0, 25)), holidayCalendar), false);
 
@@ -77,7 +120,7 @@ test("month end Saturday skips seven day streak", async () => {
 
 test("buildMonthEndSaturdayEvents emits Saturday events", async () => {
   const calendar = makeTestCalendar();
-  const events = await buildMonthEndSaturdayEvents({ years: [2025], maxStreak: 7 }, calendar);
+  const events = await buildMonthEndSaturdayEvents({ years: [2025] }, calendar);
 
   assert.ok(events.length >= 6);
   assert.ok(events.every((event) => event.start.getUTCDay() === 6));
