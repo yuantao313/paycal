@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/", "destination": "/api/index.js" },
+    { "source": "/payday.ics", "destination": "/api/payday.ics.js" },
+    { "source": "/month-end-saturday.ics", "destination": "/api/month-end-saturday.ics.js" },
+    { "source": "/combined.ics", "destination": "/api/combined.ics.js" }
+  ]
+}

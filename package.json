@@ -1,0 +1,13 @@
+{
+  "name": "payday-calendar-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:cloudflare": "npx wrangler@latest dev",
+    "deploy:cloudflare": "npx wrangler@latest deploy",
+    "dev:vercel": "npx vercel@latest dev",
+    "deploy:vercel": "npx vercel@latest deploy --prod",
+    "test": "node --test test/*.test.mjs"
+  }
+}

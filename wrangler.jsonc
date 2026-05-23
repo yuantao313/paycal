@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "payday-calendar-service",
+  "main": "src/cloudflare-worker.js",
+  "compatibility_date": "2026-05-24",
+  "workers_dev": true
+}
