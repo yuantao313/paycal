@@ -8,6 +8,7 @@ import {
   lastSaturday,
   makeTestCalendar,
   parseOptions,
+  renderHome,
   resolvePayday,
   shouldWorkMonthEndSaturday,
 } from "../src/calendar.js";
@@ -99,4 +100,15 @@ test("buildCalendar emits ICS", () => {
   assert.match(ics, /BEGIN:VCALENDAR/);
   assert.match(ics, /DTSTART;VALUE=DATE:20250613/);
   assert.match(ics, /SUMMARY:2025年6月发薪日/);
+});
+
+test("renderHome lists selectable calendar subscriptions", () => {
+  const html = renderHome(new URL("https://calendar.example/"));
+
+  assert.match(html, /data-calendar="payday"/);
+  assert.match(html, /data-calendar="month-end-saturday"/);
+  assert.match(html, /data-calendar="combined"/);
+  assert.match(html, /\/payday\.ics/);
+  assert.match(html, /\/month-end-saturday\.ics/);
+  assert.match(html, /\/combined\.ics/);
 });

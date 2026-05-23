@@ -256,23 +256,41 @@ export function renderHome(url) {
   <title>发薪日与月末周六订阅</title>
   <style>
     :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f7f7f4; color: #202521; }
-    main { width: min(780px, calc(100vw - 32px)); padding: 32px 0; }
-    h1 { margin: 0 0 20px; font-size: 28px; }
-    form { display: grid; gap: 16px; padding: 20px; border: 1px solid #d8d8cf; border-radius: 8px; background: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f7f7f4; color: #202521; }
+    main { width: min(980px, calc(100vw - 32px)); margin: 0 auto; padding: 32px 0; }
+    h1 { margin: 0 0 20px; font-size: 28px; line-height: 1.2; }
+    form { display: grid; gap: 18px; }
+    fieldset { margin: 0; padding: 0; border: 0; }
+    legend { margin: 0 0 10px; font-weight: 700; }
     label { display: grid; gap: 8px; font-size: 14px; }
     input, select { min-height: 40px; padding: 0 10px; border: 1px solid #c6c7be; border-radius: 6px; background: transparent; color: inherit; font: inherit; }
     button { min-height: 42px; border: 0; border-radius: 6px; background: #23685f; color: #fff; font: inherit; cursor: pointer; }
+    button.secondary { min-height: 36px; padding: 0 12px; border: 1px solid #c6c7be; background: transparent; color: inherit; }
     .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
     .check { display: flex; align-items: center; gap: 10px; }
     .check input { min-height: auto; }
-    output { display: grid; gap: 10px; margin-top: 16px; padding: 14px; border-radius: 6px; background: #edf4f1; overflow-wrap: anywhere; }
+    .controls { padding: 18px; border: 1px solid #d8d8cf; border-radius: 8px; background: #fff; }
+    .subscriptions { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .subscription { min-height: 132px; padding: 16px; border: 1px solid #d8d8cf; border-radius: 8px; background: #fff; cursor: pointer; }
+    .subscription:has(input:checked) { border-color: #23685f; box-shadow: inset 0 0 0 1px #23685f; }
+    .subscription input { min-height: auto; margin: 2px 0 0; }
+    .subscription-head { display: flex; align-items: flex-start; gap: 10px; font-weight: 700; }
+    .subscription p { margin: 10px 0 0 28px; color: #5a625d; line-height: 1.5; }
+    output { display: grid; gap: 10px; min-height: 54px; padding: 14px; border-radius: 6px; background: #edf4f1; overflow-wrap: anywhere; }
+    .result-item { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid rgba(32, 37, 33, 0.12); }
+    .result-item:last-child { border-bottom: 0; }
+    .result-title { font-weight: 700; }
+    .result-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     a { color: #135e55; }
     @media (prefers-color-scheme: dark) {
       body { background: #161817; color: #edf2ee; }
-      form { background: #202322; border-color: #3e4743; }
+      .controls, .subscription { background: #202322; border-color: #3e4743; }
       input, select { border-color: #58625e; }
+      .subscription:has(input:checked) { border-color: #8ed8ca; box-shadow: inset 0 0 0 1px #8ed8ca; }
+      .subscription p { color: #b8c2bc; }
       output { background: #1e2d2a; }
+      .result-item { border-bottom-color: rgba(237, 242, 238, 0.14); }
       a { color: #8ed8ca; }
     }
   </style>
@@ -281,22 +299,51 @@ export function renderHome(url) {
   <main>
     <h1>发薪日与月末周六订阅</h1>
     <form id="form">
-      <div class="row">
-        <label>每月几号发薪
-          <input id="day" type="number" min="1" max="31" value="15" required>
+      <fieldset class="controls">
+        <legend>规则</legend>
+        <div class="row">
+          <label>每月几号发薪
+            <input id="day" type="number" min="1" max="31" value="15" required>
+          </label>
+          <label>生成年份
+            <select id="span">
+              <option value="2">当年 + 明年</option>
+              <option value="3">去年 + 当年 + 明年</option>
+              <option value="5">连续 5 年</option>
+            </select>
+          </label>
+        </div>
+        <label class="check">
+          <input id="advance" type="checkbox" checked>
+          发薪日遇休息日提前
         </label>
-        <label>生成年份
-          <select id="span">
-            <option value="2">当年 + 明年</option>
-            <option value="3">去年 + 当年 + 明年</option>
-            <option value="5">连续 5 年</option>
-          </select>
-        </label>
-      </div>
-      <label class="check">
-        <input id="advance" type="checkbox" checked>
-        发薪日遇休息日提前
-      </label>
+      </fieldset>
+      <fieldset>
+        <legend>订阅</legend>
+        <div class="subscriptions">
+          <label class="subscription" data-calendar="payday">
+            <span class="subscription-head">
+              <input type="checkbox" name="calendar" value="payday" checked>
+              <span>发薪日</span>
+            </span>
+            <p>公司发薪日，默认 15 日，遇休息日提前。</p>
+          </label>
+          <label class="subscription" data-calendar="month-end-saturday">
+            <span class="subscription-head">
+              <input type="checkbox" name="calendar" value="month-end-saturday" checked>
+              <span>月末周六</span>
+            </span>
+            <p>每月最后一个周六，跳过法定节假日和调休工作日。</p>
+          </label>
+          <label class="subscription" data-calendar="combined">
+            <span class="subscription-head">
+              <input type="checkbox" name="calendar" value="combined" checked>
+              <span>合并订阅</span>
+            </span>
+            <p>把发薪日和月末周六合并到一个日历。</p>
+          </label>
+        </div>
+      </fieldset>
       <button type="submit">生成订阅链接</button>
     </form>
     <output id="result"></output>
@@ -305,6 +352,11 @@ export function renderHome(url) {
     const origin = ${JSON.stringify(origin)};
     const form = document.querySelector("#form");
     const result = document.querySelector("#result");
+    const calendars = {
+      payday: { name: "发薪日", path: "/payday.ics" },
+      "month-end-saturday": { name: "月末周六", path: "/month-end-saturday.ics" },
+      combined: { name: "合并订阅", path: "/combined.ics" },
+    };
     function years() {
       const span = Number(document.querySelector("#span").value || "2");
       const now = new Date().getUTCFullYear();
@@ -319,15 +371,49 @@ export function renderHome(url) {
       });
       return origin + path + "?" + params.toString();
     }
+    function selectedCalendars() {
+      return Array.from(document.querySelectorAll('input[name="calendar"]:checked'))
+        .map((input) => calendars[input.value])
+        .filter(Boolean);
+    }
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
     function render() {
-      const links = [
-        ["发薪日", link("/payday.ics")],
-        ["月末周六", link("/month-end-saturday.ics")],
-        ["合并订阅", link("/combined.ics")],
-      ];
-      result.innerHTML = links.map(([name, href]) => '<div>' + name + ': <a href="' + href + '">' + href + '</a></div>').join("");
+      const selected = selectedCalendars();
+      if (selected.length === 0) {
+        result.innerHTML = "请选择至少一个订阅。";
+        return;
+      }
+      result.innerHTML = selected.map((item) => {
+        const href = link(item.path);
+        const safeHref = escapeHtml(href);
+        return '<div class="result-item">' +
+          '<div class="result-title">' + escapeHtml(item.name) + '</div>' +
+          '<div class="result-actions">' +
+          '<a href="' + safeHref + '">' + safeHref + '</a>' +
+          '<button class="secondary" type="button" data-copy="' + safeHref + '">复制</button>' +
+          '</div>' +
+          '</div>';
+      }).join("");
     }
     form.addEventListener("submit", (event) => { event.preventDefault(); render(); });
+    form.addEventListener("input", render);
+    result.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy]");
+      if (!button) {
+        return;
+      }
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = "已复制";
+      setTimeout(() => { button.textContent = "复制"; }, 1200);
+    });
     render();
   </script>
 </body>
